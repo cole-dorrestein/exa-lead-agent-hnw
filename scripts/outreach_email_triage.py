@@ -5,12 +5,16 @@ Triage status on each row:
   pending            - not reviewed yet (included in --interactive until you y/n)
   approved_generate  - you approved: cold-email generation may run for this contact
   declined           - you declined: no generation; hidden from default queues
+
+Interactive and bulk modes group by normalized primary_email: one decision applies to all pending
+listings for that email (same recipient, multiple hotel outreach_ids).
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,6 +37,9 @@ from outreach.schema import (  # noqa: E402
 from outreach.store import OutreachStore  # noqa: E402
 from outreach.sync import load_intimate_doc  # noqa: E402
 
+NOTE_EMAIL_GROUP_APPROVED = "email_group_approved"
+NOTE_EMAIL_GROUP_DECLINED = "email_group_declined"
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -48,6 +55,56 @@ def _summary(doc: dict) -> None:
         st = t.get("status") if isinstance(t, dict) else "?"
         counts[st] = counts.get(st, 0) + 1
     print("triage counts:", counts, "total:", len(by_id))
+
+
+def _pending_eligible_rows(
+    *,
+    by_id: dict,
+    netlocs: frozenset,
+    email_only_row: Callable[[str, dict], bool],
+    triage_allowed_email: Callable[[dict], bool],
+) -> list[tuple[str, dict]]:
+    out: list[tuple[str, dict]] = []
+    for oid, row in by_id.items():
+        if not isinstance(row, dict):
+            continue
+        triage = row.get("triage")
+        if not isinstance(triage, dict) or triage.get("status") != TRIAGE_PENDING:
+            continue
+        if not row_matches_hotel_netlocs(row, netlocs):
+            continue
+        if not email_only_row(str(oid), row):
+            continue
+        if not triage_allowed_email(row):
+            continue
+        out.append((str(oid), row))
+    out.sort(key=lambda x: (x[1].get("hotel_canonical_url") or "", x[0]))
+    return out
+
+
+def _group_pending_by_email(rows: list[tuple[str, dict]]) -> list[tuple[str, list[tuple[str, dict]]]]:
+    """Return (email, [(oid, row), ...]) sorted by email; each inner list sorted by oid."""
+    buckets: dict[str, list[tuple[str, dict]]] = {}
+    for oid, row in rows:
+        email = normalize_email(row.get("primary_email"))
+        if not email:
+            continue
+        buckets.setdefault(email, []).append((oid, row))
+    for lst in buckets.values():
+        lst.sort(key=lambda x: x[0])
+    return sorted(buckets.items(), key=lambda kv: kv[0])
+
+
+def _apply_triage_to_group(rows: list[tuple[str, dict]], *, status: str, note: str) -> int:
+    now = _now()
+    n = 0
+    for oid, row in rows:
+        triage = row.setdefault("triage", {})
+        triage["status"] = status
+        triage["decided_at_utc"] = now
+        triage["note"] = note
+        n += 1
+    return n
 
 
 def main() -> int:
@@ -132,39 +189,33 @@ def main() -> int:
         changed = 0
         if args.approve_all_pending or args.decline_all_pending:
             new_status = TRIAGE_APPROVED if args.approve_all_pending else TRIAGE_DECLINED
-            pending_total = 0
-            pending_matched = 0
-            for oid, row in by_id.items():
-                if not isinstance(row, dict):
-                    continue
-                triage = row.setdefault("triage", {})
-                if triage.get("status") != TRIAGE_PENDING:
-                    continue
-                pending_total += 1
-                if not row_matches_hotel_netlocs(row, netlocs):
-                    continue
-                if not _email_only_row(str(oid), row):
-                    continue
-                if not _triage_allowed_email(row):
-                    continue
-                pending_matched += 1
-                triage["status"] = new_status
-                triage["decided_at_utc"] = _now()
-                changed += 1
+            note = NOTE_EMAIL_GROUP_APPROVED if new_status == TRIAGE_APPROVED else NOTE_EMAIL_GROUP_DECLINED
+            pending_total = sum(
+                1
+                for r in by_id.values()
+                if isinstance(r, dict) and isinstance(r.get("triage"), dict) and r["triage"].get("status") == TRIAGE_PENDING
+            )
+            eligible = _pending_eligible_rows(
+                by_id=by_id,
+                netlocs=netlocs,
+                email_only_row=_email_only_row,
+                triage_allowed_email=_triage_allowed_email,
+            )
+            groups = _group_pending_by_email(eligible)
+            pending_matched = sum(len(rows) for _, rows in groups)
+            for _email, rows in groups:
+                changed += _apply_triage_to_group(rows, status=new_status, note=note)
             if netlocs:
                 print(f"hotel netloc filter: {sorted(netlocs)} | pending matched {pending_matched} of {pending_total}")
-            print(f"updated {changed} rows -> {new_status}")
+            print(f"updated {changed} rows -> {new_status} ({len(groups)} email groups)")
         else:
-            pending_rows = [
-                (oid, row)
-                for oid, row in by_id.items()
-                if isinstance(row, dict)
-                and isinstance(row.get("triage"), dict)
-                and row["triage"].get("status") == TRIAGE_PENDING
-                and row_matches_hotel_netlocs(row, netlocs)
-                and _email_only_row(str(oid), row)
-                and _triage_allowed_email(row)
-            ]
+            eligible = _pending_eligible_rows(
+                by_id=by_id,
+                netlocs=netlocs,
+                email_only_row=_email_only_row,
+                triage_allowed_email=_triage_allowed_email,
+            )
+            groups = _group_pending_by_email(eligible)
             if netlocs:
                 all_pending = sum(
                     1
@@ -173,27 +224,27 @@ def main() -> int:
                     and isinstance(r.get("triage"), dict)
                     and r["triage"].get("status") == TRIAGE_PENDING
                 )
-                print(f"hotel netloc filter: {sorted(netlocs)} | interactive queue {len(pending_rows)} of {all_pending} pending")
-            pending_rows.sort(key=lambda x: (x[1].get("hotel_canonical_url") or "", x[0]))
-            for oid, row in pending_rows:
-                snap = row.get("intimate_snapshot") or {}
+                print(f"hotel netloc filter: {sorted(netlocs)} | interactive queue {len(groups)} emails ({len(eligible)} rows) of {all_pending} pending")
+            for email, rows in groups:
+                leader_oid, leader_row = rows[0]
+                snap = leader_row.get("intimate_snapshot") or {}
                 name = snap.get("full_name") or "?"
-                em = row.get("primary_email") or "?"
-                hotel = row.get("hotel_canonical_url") or "?"
-                ans = input(f"{oid} | {hotel} | {em} | {name}\nApprove generate? [y/n/q] ").strip().lower()
+                lines = [f"{oid} | {r.get('hotel_canonical_url') or '?'}" for oid, r in rows[:12]]
+                if len(rows) > 12:
+                    lines.append(f"... +{len(rows) - 12} more outreach rows same email")
+                block = "\n".join(lines)
+                ans = input(
+                    f"Email group ({len(rows)} listing(s)): {email}\n{name}\n{block}\nApprove generate for ALL listings? [y/n/q] "
+                ).strip().lower()
                 if ans == "q":
                     print("quit")
                     break
-                triage = row.setdefault("triage", {})
                 if ans == "y":
-                    triage["status"] = TRIAGE_APPROVED
+                    changed += _apply_triage_to_group(rows, status=TRIAGE_APPROVED, note=NOTE_EMAIL_GROUP_APPROVED)
                 elif ans == "n":
-                    triage["status"] = TRIAGE_DECLINED
+                    changed += _apply_triage_to_group(rows, status=TRIAGE_DECLINED, note=NOTE_EMAIL_GROUP_DECLINED)
                 else:
                     print("skip (no change)")
-                    continue
-                triage["decided_at_utc"] = _now()
-                changed += 1
             print(f"interactive updates: {changed}")
 
         doc["updated_at_utc"] = _now()
