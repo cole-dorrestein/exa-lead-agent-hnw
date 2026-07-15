@@ -1,5 +1,193 @@
 Task: produce the JSON object described in the system prompt (match_id, subject, body).
 
-Use the JSON below for personalisation: full_name, title, company, email fields, target_url / hotel context, fit_reason, contact_evidence_summary, intimacy_grade, phase1_research, and outreach_* fields if present. Ground every factual claim in this data or in the fixed sender/partner facts from the system prompt—nothing else.
+Use the JSON below for personalisation. Ground every factual claim in this data or in the fixed sender/partner facts from the system prompt—nothing else.
+The json is scraped from the internet and very well may contain inaccuracies or wrongly identified information. Use what you think is most likely to be true and relevant to the person. The goal is to catch their eye, but never lie or overstate.
+Some Contact JSON rows may be email-deduped and include merged_occurrences, related_target_urls, and related_hotel_canonical_urls. Treat these as extra context for one recipient; write exactly one email, not one per occurrence or hotel.
 
-Reminder: subject = at least Key term 1 + Key term 2; third chip optional; fourth only if still scannable. Body follows the numbered scaffold; sign as Ansh Arora. Never assign Cole’s professional or music background to Ansh.
+Reminder: subject = at least Key term 1 + Key term 2; third chip optional but recommended; fourth only if still scannable. The subject is really the most eye catching part of the email, so make it extremely relevant to the person and the company.
+
+Examples of cold emails that got a response:
+<examples>
+<example>
+<json>
+    {
+      "occurrence_id": "jsons/hotel_leads__chesterfieldmayfair_com__b5965ba9.enriched.json::li:https://www.linkedin.com/in/jonathan-raggett-aa787097",
+      "source_enriched_json": "jsons/hotel_leads__chesterfieldmayfair_com__b5965ba9.enriched.json",
+      "target_url": "https://chesterfieldmayfair.com/",
+      "contact": {
+        "full_name": "Jonathan Raggett",
+        "title": "CEO",
+        "company": "Red Carnation Hotels",
+        "linkedin_url": "https://www.linkedin.com/in/jonathan-raggett-aa787097",
+        "email": "jonathan@rchmail.com",
+        "email2": null,
+        "phone": null,
+        "phone2": null,
+        "x_handle": "J_Raggett",
+        "other_contact_detail": "Executive office via main RCH or property GM channels",
+        "decision_maker_score": "high",
+        "intimacy_grade": "high",
+        "fit_reason": "CEO with ultimate oversight on brand strategy, technology investments and commercial performance across the collection.",
+        "contact_evidence_summary": "Official executive team page with detailed bio. Multiple property pages reference leadership under him.",
+        "evidence": [
+          {
+            "source_url": "https://redcarnationhotels.com/our-story/our-people/executive-team",
+            "source_type": "official_site",
+            "quote_or_fact": "Jonathan Raggett. CEO. Joined The Red Carnation Hotel Collection in 1998..."
+          }
+        ],
+        "linkedin_profile": {
+          "linkedin_url": "https://www.linkedin.com/in/jonathan-raggett-aa787097",
+          "display_name": "Jonathan Raggett",
+          "headline": "CEO Red Carnation Hotels",
+          "location": "London, England, United Kingdom (GB)",
+          "about": "After almost forty years in the hospitality industry, I remain passionate about the opportunities that it offers to anyone who is prepared to work hard. Formal qualifications are not always necessary; a friendly personality, the right attitude and a willingness to learn are the keys to success.\n\nTotal Experience: 34 years and 8 months",
+          "experience": [
+            {
+              "title": "Manager",
+              "organization": "Maharani Hotel",
+              "date_range": "Jan 1991 - Jan 1993",
+              "location": "Durban, South Africa",
+              "description": null
+            },
+            {
+              "title": "Director And General Manager",
+              "organization": "The St Pierre Park Hotel",
+              "date_range": "Jan 1993 - Jan 1998",
+              "location": "Guernsey, United Kingdom",
+              "description": null
+            },
+            {
+              "title": "General Manager",
+              "organization": "The Rubens at the Palace and Hotel 41",
+              "date_range": "Jun 1998 - Sep 2000",
+              "location": null,
+              "description": "Responsible for a major £8m refurbishment to The Rubens at the Palace, a 174-bedroom property, to 4-star deluxe standards and opened London's first all-inclusive hotel, Hotel 41, which won Hotel of the Year – Group at the 2013 Catey Awards."
+            },
+            {
+              "title": "Managing Director",
+              "organization": "The Red Carnation Hotel Collection (Red Carnation Hotels)",
+              "date_range": "Sep 2000 - Present",
+              "location": "London, United Kingdom",
+              "description": "As Managing Director of Red Carnation Hotels, I am responsible for the operation of twenty luxury five star hotels across the globe - London, Edinburgh, Dorset, Ireland, Guernsey, Geneva, Palm Beach and Southern Africa. Red Carnation Hotels pride themselves on offering outstanding levels of comfort and an exceptional guest experience. In recent years hotels within the collection have received awards from various professional bodies; the company has been recognised for the training it…"
+            }
+          ],
+          "education": [
+            {
+              "school": "Westminster College",
+              "degree_or_field": "Hospitality Administration/Management",
+              "date_range": null
+            }
+          ],
+          "skills": [
+            "hospitality",
+            "director",
+            "hotels",
+            "responsible",
+            "operation",
+            "luxury",
+            "africa",
+            "training",
+            "property",
+            "hotel",
+            "hospitality industry"
+          ],
+          "activity_themes": [
+            "Celebrating awards for Red Carnation Hotels like Egerton House, Hotel 41 and Ashford Castle",
+            "Supporting charity events including Summer Cycle Challenge and leukaemia fundraising",
+            "Hospitality leadership training at Cranfield School of Management",
+            "Industry networking at Golden Keys galas and leadership conferences",
+            "Highlighting hotel team achievements, work anniversaries and operational successes",
+            "Cancer awareness, World Cancer Day initiatives and patient support",
+            "Sharing South African history, travel and hospitality stories"
+          ],
+          "source_urls": [
+            "https://www.linkedin.com/posts/jonathan-raggett-aa787097_redcarnationhotels-activity-7427720033214205952-0x1H",
+            "https://www.linkedin.com/posts/hospitality-action_hospitalityaction-wevegotyou-summercyclechallenge-activity-7427700563112308737-pwol",
+            "https://www.linkedin.com/posts/james-mclaughlin-49661317_really-proud-of-the-amazing-feedback-we-have-activity-7427445711614418945-PrCr"
+          ],
+          "data_quality": "strong",
+          "caveats": null
+        }
+      }
+    },
+</json>
+
+
+From this the highly relevant subject is composed of the fact that Jonathan has worked in South Africa and so has Cole, and also he studied at a UK university so we included that.
+Since he is also CEO we asked directly for a chat.
+
+
+<subject>
+Subject:
+Westminster College + South Africa (Maharini) + Linkedin
+</subject>
+<body>
+Hi Jonathan,
+
+Once I saw your South Africa experience, I knew I had to reach out. I'm a student at Imperial College London, and my partner Cole's family is active in luxury hotel ownership and operations in South Africa.
+
+We're exploring how modern software, and a little bit of AI, can improve inbound guest email, reservations workflow and the standard of service guests expect from serious hospitality brands.
+
+Naturally, as CEO, I'm sure you're close to the details of guest experience and operational workflow, so I was hoping to ask a few focused questions and learn how that looks across Red Carnation.
+
+It would be pretty easy + fun for us to visit you in person at a London hotel anytime too, since we're only a stone's throw away - our campus is in South Kensington.
+
+Shall we start off online - would you be up for a quick 15 minute chat next week, and when is best with you?
+
+Best,
+Ansh Arora
+</body>
+</example>
+
+<example>
+<json>
+{
+      "full_name": "Isabelle Thomas",
+      "title": "PR Director",
+      "company": "Red Carnation Hotels",
+      "phone": null,
+      "phone2": null,
+      "email": "ithomas@rchmail.com",
+      "email2": null,
+      "linkedin_url": "https://www.linkedin.com/in/isabelle-thomas-b3243bb3",
+      "x_handle": null,
+      "intimacy_grade": "high",
+      "decision_maker_score": "medium",
+      "other_contact_detail": "Influencer / PR enquiries: influencers@rchmail.com",
+      "fit_reason": "PR and communications role tied to brand messaging, influencer partnerships and guest experience storytelling that can intersect with guest comms tech.",
+      "contact_evidence_summary": "Email pattern and references on RCH sites for PR contact. influencers@rchmail.com on official contact page.",
+      "evidence": [
+        {
+          "source_url": "https://chesterfieldmayfair.com/contact-us",
+          "source_type": "official_site",
+          "quote_or_fact": "Influencer Enquiries Email: influencers@rchmail.com"
+        }
+      ]
+}
+</json>
+
+Whereas for Isabelle we have very little personal information for her, and also she does not seem highly relevant as a potential key holder we can sell to, so to get a response we use the classic cold email template and take the angle of being a student which works better when we have little rapport we can possibly build with them.
+
+<subject>
+Subject:
+Chesterfield Mayfair + PR Director + Guest Experience
+</subject>
+<body>
+Hi Isabelle,
+
+Hope you’re well :)
+
+I came across Chesterfield Mayfair as part of my research at Imperial College London into hospitality operations, particularly around inbound guest email and reservations workflow. My partner Cole’s family is active in hotel ownership and operations in South Africa.
+
+Your role as PR Director at Red Carnation Hotels, focused on brand messaging, influencer partnerships and guest experience storytelling, makes you an ideal person to speak with about opportunities in guest comms tech.
+
+I’d love to ask you a few focused questions if you might have 10 minutes in the coming week.
+
+Best,
+Ansh Arora
+</body>
+</example>
+</examples>
+
+Body follows the numbered scaffold; sign as Ansh Arora. 
