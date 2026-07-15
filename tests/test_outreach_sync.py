@@ -195,3 +195,102 @@ def test_merge_snapshot_keeps_email_merge_summary() -> None:
     assert snap["related_hotel_canonical_urls"] == ["https://hotel-a.example", "https://hotel-b.example"]
     oid = next(iter(state["by_id"]))
     assert oid in state["indexes"]["by_hotel"]["https://hotel-b.example"]
+
+
+def test_merge_new_row_inherits_generated_email_terminal() -> None:
+    state = empty_state()
+    pem = "test.person@exhotel.com"
+    existing_oid = compute_outreach_id(pem, "https://www.exhotel.com/")
+    state["by_id"][existing_oid] = {
+        "outreach_id": existing_oid,
+        "primary_email": pem,
+        "target_url": "https://www.exhotel.com/",
+        "hotel_canonical_url": "https://www.exhotel.com",
+        "intimate_snapshot": {},
+        "intimate_row_hash": "x",
+        "intimate_doc_generated_at_utc": None,
+        "triage": {"status": TRIAGE_APPROVED, "decided_at_utc": "2026-01-02T00:00:00+00:00", "note": None},
+        "generation": {"body": "already generated"},
+        "send": None,
+    }
+    state["indexes"] = rebuild_indexes(state["by_id"])
+    intimate = {
+        "version": 1,
+        "generated_at_utc": "2026-01-03T00:00:00+00:00",
+        "contacts": [
+            {
+                "email": pem,
+                "phase1_research": {"target_url": "https://www.otherhotel.com/", "source_enriched_json": "x.json"},
+            }
+        ],
+    }
+    state2, added, _ = merge_intimates_into_state(intimate, state)
+    assert added == 1
+    new_oid = compute_outreach_id(pem, "https://www.otherhotel.com/")
+    assert state2["by_id"][new_oid]["triage"]["status"] == TRIAGE_DECLINED
+
+
+def test_merge_new_row_inherits_declined_email_terminal() -> None:
+    state = empty_state()
+    pem = "test.person@exhotel.com"
+    existing_oid = compute_outreach_id(pem, "https://www.exhotel.com/")
+    state["by_id"][existing_oid] = {
+        "outreach_id": existing_oid,
+        "primary_email": pem,
+        "target_url": "https://www.exhotel.com/",
+        "hotel_canonical_url": "https://www.exhotel.com",
+        "intimate_snapshot": {},
+        "intimate_row_hash": "x",
+        "intimate_doc_generated_at_utc": None,
+        "triage": {"status": TRIAGE_DECLINED, "decided_at_utc": "2026-01-02T00:00:00+00:00", "note": None},
+        "generation": None,
+        "send": None,
+    }
+    state["indexes"] = rebuild_indexes(state["by_id"])
+    intimate = {
+        "version": 1,
+        "generated_at_utc": "2026-01-03T00:00:00+00:00",
+        "contacts": [
+            {
+                "email": pem,
+                "phase1_research": {"target_url": "https://www.otherhotel.com/", "source_enriched_json": "x.json"},
+            }
+        ],
+    }
+    state2, added, _ = merge_intimates_into_state(intimate, state)
+    assert added == 1
+    new_oid = compute_outreach_id(pem, "https://www.otherhotel.com/")
+    assert state2["by_id"][new_oid]["triage"]["status"] == TRIAGE_DECLINED
+
+
+def test_merge_new_row_inherits_approved_resume_state() -> None:
+    state = empty_state()
+    pem = "test.person@exhotel.com"
+    existing_oid = compute_outreach_id(pem, "https://www.exhotel.com/")
+    state["by_id"][existing_oid] = {
+        "outreach_id": existing_oid,
+        "primary_email": pem,
+        "target_url": "https://www.exhotel.com/",
+        "hotel_canonical_url": "https://www.exhotel.com",
+        "intimate_snapshot": {},
+        "intimate_row_hash": "x",
+        "intimate_doc_generated_at_utc": None,
+        "triage": {"status": TRIAGE_APPROVED, "decided_at_utc": "2026-01-02T00:00:00+00:00", "note": None},
+        "generation": None,
+        "send": None,
+    }
+    state["indexes"] = rebuild_indexes(state["by_id"])
+    intimate = {
+        "version": 1,
+        "generated_at_utc": "2026-01-03T00:00:00+00:00",
+        "contacts": [
+            {
+                "email": pem,
+                "phase1_research": {"target_url": "https://www.otherhotel.com/", "source_enriched_json": "x.json"},
+            }
+        ],
+    }
+    state2, added, _ = merge_intimates_into_state(intimate, state)
+    assert added == 1
+    new_oid = compute_outreach_id(pem, "https://www.otherhotel.com/")
+    assert state2["by_id"][new_oid]["triage"]["status"] == TRIAGE_APPROVED

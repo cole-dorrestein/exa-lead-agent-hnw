@@ -9,9 +9,10 @@ from typing import Any
 from lead_aggregates.builders import has_structured_phone
 from lead_aggregates.urls import canonical_hotel_url
 
+from outreach.email_semantics import EmailStatus, absorb_row, build_email_statuses
 from outreach.ids import compute_outreach_id, primary_delivery_email, target_url_from_intimate_row
 from outreach.indexes import rebuild_indexes
-from outreach.schema import TRIAGE_PENDING, empty_state
+from outreach.schema import TRIAGE_APPROVED, TRIAGE_DECLINED, TRIAGE_PENDING, empty_state
 
 
 def _row_hash(contact_row: dict[str, Any]) -> str:
@@ -86,6 +87,21 @@ def _new_row(
     }
 
 
+def _apply_inherited_triage(row: dict[str, Any], status: EmailStatus | None) -> None:
+    if status is None:
+        return
+    triage = row.get("triage")
+    if not isinstance(triage, dict):
+        return
+    if status.has_generated or status.has_terminal:
+        triage["status"] = TRIAGE_DECLINED
+        triage["note"] = "inherited_email_terminal"
+        return
+    if status.has_approved:
+        triage["status"] = TRIAGE_APPROVED
+        triage["note"] = "inherited_email_approved"
+
+
 def load_intimate_doc(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -116,6 +132,7 @@ def merge_intimates_into_state(
     contacts = intimate_doc.get("contacts")
     if not isinstance(contacts, list):
         contacts = []
+    email_statuses = build_email_statuses(by_id)
 
     for contact_row in contacts:
         if not isinstance(contact_row, dict):
@@ -135,7 +152,7 @@ def merge_intimates_into_state(
 
         existing = by_id.get(oid)
         if existing is None:
-            by_id[oid] = _new_row(
+            new_row = _new_row(
                 outreach_id=oid,
                 primary_email=pem,
                 target_url=target_url,
@@ -144,6 +161,9 @@ def merge_intimates_into_state(
                 row_hash=row_hash,
                 intimate_generated_at=intimate_generated_at,
             )
+            _apply_inherited_triage(new_row, email_statuses.get(pem))
+            by_id[oid] = new_row
+            absorb_row(email_statuses.setdefault(pem, EmailStatus()), new_row)
             added += 1
             continue
 

@@ -29,16 +29,19 @@ def test_generation_candidates() -> None:
         "by_id": {
             "a": {
                 "outreach_id": "a",
+                "primary_email": "a@example.com",
                 "triage": {"status": TRIAGE_APPROVED},
                 "generation": None,
             },
             "b": {
                 "outreach_id": "b",
+                "primary_email": "b@example.com",
                 "triage": {"status": TRIAGE_APPROVED},
                 "generation": {"body": "done"},
             },
             "c": {
                 "outreach_id": "c",
+                "primary_email": "c@example.com",
                 "triage": {"status": TRIAGE_PENDING},
                 "generation": None,
             },
@@ -92,3 +95,72 @@ def test_build_user_message_includes_full_nested_contact_payload() -> None:
     assert "pipeline_v4_candidate_match" in text
     assert "matched_linkedin" in text
     assert "candidate-level note" in text
+
+
+def test_generation_candidates_blocks_generated_email() -> None:
+    doc = {
+        "version": 1,
+        "by_id": {
+            "a": {
+                "outreach_id": "a",
+                "primary_email": "same@example.com",
+                "triage": {"status": TRIAGE_APPROVED},
+                "generation": {"body": "already sent"},
+            },
+            "b": {
+                "outreach_id": "b",
+                "primary_email": "same@example.com",
+                "triage": {"status": TRIAGE_APPROVED},
+                "generation": None,
+            },
+        },
+    }
+    assert generation_candidates(doc) == []
+
+
+def test_generation_candidates_blocks_declined_email() -> None:
+    doc = {
+        "version": 1,
+        "by_id": {
+            "a": {
+                "outreach_id": "a",
+                "primary_email": "same@example.com",
+                "triage": {"status": "declined"},
+                "generation": None,
+            },
+            "b": {
+                "outreach_id": "b",
+                "primary_email": "same@example.com",
+                "triage": {"status": TRIAGE_APPROVED},
+                "generation": None,
+            },
+        },
+    }
+    assert generation_candidates(doc) == []
+
+
+def test_generation_candidates_resume_dedupes_by_email() -> None:
+    doc = {
+        "version": 1,
+        "by_id": {
+            "a": {
+                "outreach_id": "a",
+                "primary_email": "same@example.com",
+                "triage": {"status": TRIAGE_APPROVED},
+                "generation": None,
+            },
+            "b": {
+                "outreach_id": "b",
+                "primary_email": "same@example.com",
+                "triage": {"status": TRIAGE_APPROVED},
+                "generation": None,
+            },
+            "c": {
+                "outreach_id": "c",
+                "primary_email": "other@example.com",
+                "triage": {"status": TRIAGE_APPROVED},
+                "generation": None,
+            },
+        },
+    }
+    assert generation_candidates(doc) == ["a", "c"]

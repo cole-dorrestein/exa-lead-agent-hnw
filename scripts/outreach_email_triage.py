@@ -21,6 +21,7 @@ if str(_ROOT) not in sys.path:
 from lead_aggregates.builders import has_structured_phone  # noqa: E402
 
 from outreach.batch_cold_email import build_intimate_index_by_outreach_id  # noqa: E402
+from outreach.email_semantics import build_email_statuses, normalize_email  # noqa: E402
 from outreach.indexes import rebuild_indexes  # noqa: E402
 from outreach.netloc_filter import netlocs_from_hotel_urls, row_matches_hotel_netlocs  # noqa: E402
 from outreach.schema import (  # noqa: E402
@@ -119,6 +120,15 @@ def main() -> int:
     def mutate(doc: dict) -> None:
         by_id = doc.setdefault("by_id", {})
         assert isinstance(by_id, dict)
+        email_statuses = build_email_statuses(by_id)
+
+        def _triage_allowed_email(row: dict) -> bool:
+            email = normalize_email(row.get("primary_email"))
+            if not email:
+                return False
+            status = email_statuses.get(email)
+            return status is None or not status.triage_blocked
+
         changed = 0
         if args.approve_all_pending or args.decline_all_pending:
             new_status = TRIAGE_APPROVED if args.approve_all_pending else TRIAGE_DECLINED
@@ -134,6 +144,8 @@ def main() -> int:
                 if not row_matches_hotel_netlocs(row, netlocs):
                     continue
                 if not _email_only_row(str(oid), row):
+                    continue
+                if not _triage_allowed_email(row):
                     continue
                 pending_matched += 1
                 triage["status"] = new_status
@@ -151,6 +163,7 @@ def main() -> int:
                 and row["triage"].get("status") == TRIAGE_PENDING
                 and row_matches_hotel_netlocs(row, netlocs)
                 and _email_only_row(str(oid), row)
+                and _triage_allowed_email(row)
             ]
             if netlocs:
                 all_pending = sum(

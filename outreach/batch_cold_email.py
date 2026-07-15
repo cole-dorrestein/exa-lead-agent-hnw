@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from outreach.email_semantics import build_email_statuses, normalize_email, row_generated
 from outreach.schema import TRIAGE_APPROVED
 
 
@@ -158,22 +159,29 @@ def build_intimate_index_by_outreach_id(
 def generation_candidates(doc: dict[str, Any]) -> list[str]:
     """Outreach ids eligible for new submit (approved, no completed body)."""
     by_id = doc.get("by_id") or {}
-    ids: list[str] = []
     if not isinstance(by_id, dict):
-        return ids
-    for oid, row in by_id.items():
+        return []
+
+    email_statuses = build_email_statuses(by_id)
+    best_by_email: dict[str, str] = {}
+    for oid, row in sorted(by_id.items(), key=lambda kv: str(kv[0])):
         if not isinstance(row, dict):
+            continue
+        email = normalize_email(row.get("primary_email"))
+        if not email:
+            continue
+        status = email_statuses.get(email)
+        if status is not None and status.generation_blocked:
             continue
         triage = row.get("triage") or {}
         if not isinstance(triage, dict):
             continue
         if triage.get("status") != TRIAGE_APPROVED:
             continue
-        gen = row.get("generation")
-        if isinstance(gen, dict) and (gen.get("body") or "").strip():
+        if row_generated(row):
             continue
-        ids.append(str(oid))
-    return sorted(ids)
+        best_by_email.setdefault(email, str(oid))
+    return sorted(best_by_email.values())
 
 
 def apply_generation_results(
