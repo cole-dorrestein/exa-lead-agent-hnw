@@ -1,46 +1,31 @@
 # ICP Database
 
-## LobbyAI (https://lobbyai.io/)
+## SSA Executive Lead Gen (High-Net-Worth Apartment Sales)
 
-**Company Description**  
-LobbyAI provides AI automation for reservation teams. It handles the full booking workflow for complex B2B inquiries, group bookings, and high-value requests.
+**Target**
+C-suite officers, VPs, and Directors at Sub-Saharan African corporations and international corporations with African offices. Revenue ≥ $20M. Industries: banking, telecoms, mining, FMCG, tech, insurance, energy.
 
-**Product Description**  
-Automates availability checks, proposal creation, follow-ups, and data entry into reservation systems while operating from the existing inbox. Features flexible pricing/quotation logic, staff approvals, out-of-the-box integrations, and strong data security.
+**Geography**
+Sub-Saharan Africa — primary markets: Nigeria, South Africa, Kenya, Ghana, Ethiopia, Tanzania.
 
-**ICP Description**  
-Hospitality reservation teams handling complex group/B2B bookings.
+**Seniority**
+- Tier 1: CEO, CFO, COO, CTO, CMO, Managing Director, Group Chief Officers
+- Tier 2: Vice Presidents (VP, SVP, EVP)
+- Tier 3: Directors (Finance Director, Commercial Director, etc.)
+- Excluded: Regional Heads, Middle Management
 
-**Sub-Verticals** (Hotels focus only)
-1. Luxury Hotels Manchester
-2. Boutique Hotels Manchester
-3. Full-Service Hotels Manchester
-4. 4-5 Star Hotels Manchester
-5. Independent Hotels Manchester
-6. Chain Hotels Manchester
-7. Historic Hotels Manchester
-8. Modern Design Hotels Manchester
-9. Business Hotels Manchester
-10. Leisure Hotels Manchester
+**Minimum contact data required**
+- LinkedIn profile URL (mandatory)
+- Email address (bonus)
+- Phone (bonus)
 
-**Demographic Signals**
-- Dedicated sales, catering, or reservations team
-- Handles high volume of complex/group/B2B inquiries
-- Uses a PMS, CRS, or reservation management system
-- Manages custom pricing, quotations, and exceptions
-- Inbox-heavy client communication workflow
-- 100+ rooms or significant event space capacity
-- Actively hiring for sales/revenue/catering roles
-- Requires staff approval workflows for bookings
+**Output use case**
+Lead list for sales team selling high-end apartments to high-net-worth individuals.
 
-**Useful Enrichments**
-- number_of_rooms, event_space_size, property_type
-- pms_crs_system (Oracle, Cloudbeds, etc.)
-- sales_catering_team_size, revenue_management_maturity
-- booking_inquiry_volume, group_business_percentage
-- tech_stack (inbox tools, CRM, reservation software)
-- hiring_signals (sales, revenue, catering roles)
-- annual_group_booking_revenue, location_type (urban/resort)
+**Useful enrichments**
+- full_name, title, company, hq_country, industry_sector
+- linkedin_url, email, phone
+- role_tier, role_family (c_suite / vp_level / director_level)
+- revenue_estimate (company-level qualifier)
 
-*Last updated: 2026-04-18. Source: Exa deep search on "About lobbyai.io, lobbyai.io customers"*
-
+*Last updated: 2026-07-27*
