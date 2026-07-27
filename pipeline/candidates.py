@@ -8,8 +8,8 @@ from pipeline.models import (
     CandidateDraft,
     CandidateLead,
     ContactRoute,
+    CorpOrg,
     GrokDiscoveryResult,
-    HotelOrg,
     OrgAlias,
     RelationshipConfidence,
     RoleConfidence,
@@ -17,9 +17,13 @@ from pipeline.models import (
     RoleTier,
     SourceRef,
     SourceType,
-    hotel_key_from_org,
+    corp_key_from_org,
+    hotel_key_from_org,   # keep — used by grok_validation until Task 4
     make_candidate_id,
 )
+
+# backward compat alias — used by exa_discovery until Task 4
+HotelOrg = CorpOrg
 
 
 def normalize_name(name: str) -> str:
@@ -49,60 +53,79 @@ def infer_current_role_confidence_from_text(title: str | None, snippet: str | No
     return "medium"
 
 
+def _word_in(word: str, text: str) -> bool:
+    """Return True if `word` appears as a whole word in `text`."""
+    return bool(re.search(r"(?<![a-z])" + re.escape(word) + r"(?![a-z])", text))
+
+
 def classify_role_family(title: str | None) -> RoleFamily:
     t = normalize_title(title)
     if not t:
         return "other"
-    if any(
-        x in t
-        for x in (
-            "owner",
-            "founder",
-            "co-founder",
-            "ceo",
-            "chief executive",
-            "managing director",
-            "chair",
-            "board",
-        )
-    ):
+    if any(x in t for x in ("owner", "founder", "co-founder", "proprietor")):
         return "owner_exec"
-    if any(
-        x in t
-        for x in (
-            "general manager",
-            "hotel manager",
-            "property manager",
-            "operations director",
-            "operations manager",
-            "front office",
-        )
-    ):
-        return "gm_ops"
-    if any(
-        x in t
-        for x in (
-            "commercial",
-            "revenue",
-            "yield",
-            "distribution",
-            "marketing director",
-            "marketing manager",
-        )
-    ):
-        return "commercial_revenue"
-    if any(x in t for x in ("sales", "business development", "events", "groups", "mice", "catering")):
-        return "sales_events"
-    if "reservation" in t or "reservations" in t:
-        return "reservations"
-    if any(x in t for x in ("it ", " i.t.", "technology", "digital", "systems", "cio", "cto")):
-        return "it_digital"
-    if any(x in t for x in ("procurement", "finance director", "financial controller", "cfo")):
-        return "procurement_finance"
+    if any(x in t for x in ("board member", "non-executive", "trustee", "board of director")):
+        return "board"
+    # short acronyms need whole-word matching to avoid substring false positives
+    _c_suite_acronyms = ("ceo", "cfo", "coo", "cto", "cmo", "ciso", "chro")
+    _c_suite_phrases = (
+        "chief executive",
+        "chief financial",
+        "chief operating",
+        "chief technology",
+        "chief marketing",
+        "chief information",
+        "chief human",
+        "managing director",
+        "md ",
+        " md",
+        "group chief",
+    )
+    if any(_word_in(x, t) for x in _c_suite_acronyms) or any(x in t for x in _c_suite_phrases):
+        return "c_suite"
+    if any(x in t for x in ("vice president", "vp ", "vp-", " vp", "svp", "evp", "avp")):
+        return "vp_level"
+    if "director" in t:
+        return "director_level"
     return "other"
 
 
-def _alias_match_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
+def classify_role_tier(title: str | None) -> RoleTier:
+    t = normalize_title(title)
+    if not t:
+        return 4
+    # short acronyms need whole-word matching to avoid substring false positives
+    _tier1_acronyms = ("ceo", "cfo", "coo", "cto", "cmo", "ciso", "chro")
+    _tier1_phrases = (
+        "owner",
+        "founder",
+        "co-founder",
+        "chief executive",
+        "managing director",
+        "group chief",
+        "md ",
+    )
+    if any(_word_in(x, t) for x in _tier1_acronyms) or any(x in t for x in _tier1_phrases):
+        return 1
+    tier2 = (
+        "vice president",
+        "vp ",
+        "vp-",
+        " vp",
+        "svp",
+        "evp",
+        "avp",
+    )
+    if any(x in t for x in tier2):
+        return 2
+    if "director" in t or "head of" in t:
+        return 3
+    if "manager" in t or "head" in t:
+        return 3
+    return 4
+
+
+def _alias_match_strings(corp: CorpOrg, aliases: list[OrgAlias]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for a in aliases:
@@ -111,7 +134,7 @@ def _alias_match_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
             continue
         seen.add(v.lower())
         out.append(v)
-    for fld in (hotel.canonical_name, hotel.property_name, hotel.brand_name, hotel.management_company):
+    for fld in (corp.canonical_name,):
         v = (fld or "").strip()
         if len(v) >= 2 and v.lower() not in seen:
             seen.add(v.lower())
@@ -121,12 +144,12 @@ def _alias_match_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
 
 def relationship_confidence_for_draft(
     draft: CandidateDraft,
-    hotel: HotelOrg,
+    corp: CorpOrg,
     aliases: list[OrgAlias],
     extra_sources: list[SourceRef] | None = None,
 ) -> RelationshipConfidence:
     """Local deterministic relationship tier using org aliases and evidence text."""
-    alias_vals = _alias_match_strings(hotel, aliases)
+    alias_vals = _alias_match_strings(corp, aliases)
     parts: list[str] = [draft.title or "", draft.company or ""]
     for src in list(draft.evidence) + list(extra_sources or []):
         parts.append(src.snippet or "")
@@ -151,7 +174,7 @@ def relationship_confidence_for_draft(
         return "medium"
 
     # Hostname-only company matching property domain (weak)
-    dom = (hotel.domains[0] if hotel.domains else "").split(".")[0].lower()
+    dom = (corp.domains[0] if corp.domains else "").split(".")[0].lower()
     name_tok = normalize_name(draft.full_name).lower().replace(" ", "")
     if dom and len(name_tok) <= 3:
         return "reject"
@@ -161,61 +184,6 @@ def relationship_confidence_for_draft(
     if classify_role_tier(draft.title) <= 2 and not alias_vals:
         return "low"
     return "low"
-
-
-def classify_role_tier(title: str | None) -> RoleTier:
-    t = normalize_title(title)
-    if not t:
-        return 4
-    tier1 = (
-        "owner",
-        "founder",
-        "co-founder",
-        "chief executive",
-        "ceo",
-        "managing director",
-        "general manager",
-        "hotel manager",
-        "property manager",
-    )
-    if any(x in t for x in tier1):
-        return 1
-    tier2 = (
-        "commercial director",
-        "revenue director",
-        "revenue manager",
-        "director of sales",
-        "sales director",
-        "marketing director",
-        "events director",
-        "groups",
-        "reservations manager",
-        "reservations director",
-        "it director",
-        "technology director",
-        "digital director",
-        "chief information",
-        "procurement",
-        "finance director",
-    )
-    if any(x in t for x in tier2):
-        return 2
-    tier3 = (
-        "front office manager",
-        "f&b",
-        "food and beverage",
-        "rooms division",
-        "meetings",
-        "sales manager",
-        "events manager",
-        "reservations supervisor",
-        "assistant",
-    )
-    if any(x in t for x in tier3):
-        return 3
-    if "director" in t or "manager" in t or "head" in t:
-        return 3
-    return 4
 
 
 def parse_linkedin_result_title(title: str | None) -> tuple[str, str | None]:
@@ -241,7 +209,7 @@ def source_type_from_url(url: str) -> SourceType:
     return "other"
 
 
-def candidate_from_linkedin_source(ref: SourceRef, hotel: HotelOrg) -> CandidateLead | None:
+def candidate_from_linkedin_source(ref: SourceRef, corp: CorpOrg) -> CandidateLead | None:
     if "linkedin.com/in/" not in (ref.url or "").lower():
         return None
     name, title = parse_linkedin_result_title(ref.title)
@@ -250,7 +218,7 @@ def candidate_from_linkedin_source(ref: SourceRef, hotel: HotelOrg) -> Candidate
     rt = classify_role_tier(title)
     rf = classify_role_family(title)
     conf = infer_current_role_confidence_from_text(title, ref.snippet)
-    key = hotel_key_from_org(hotel)
+    key = corp_key_from_org(corp)
     cid = make_candidate_id(key, name, title)
     st = source_type_from_url(ref.url)
     ev = SourceRef(
@@ -315,15 +283,15 @@ def promote_discovery_to_candidates(
     exa_by_draft: dict[str, list[SourceRef]],
 ) -> tuple[list[CandidateLead], list[CandidateDraft]]:
     """Turn drafts into CandidateLead rows or rejected drafts from local relationship checks."""
-    hotel = discovery.hotel
+    corp = discovery.hotel
     kept: list[CandidateLead] = []
     rejected: list[CandidateDraft] = []
-    key = hotel_key_from_org(hotel)
+    key = corp_key_from_org(corp)
 
     for d in discovery.drafts:
         did = d.draft_id or make_candidate_id(key, d.full_name, d.title)
         extra = exa_by_draft.get(did, [])
-        rel = relationship_confidence_for_draft(d, hotel, discovery.aliases, extra)
+        rel = relationship_confidence_for_draft(d, corp, discovery.aliases, extra)
         if rel == "reject":
             rejected.append(d.model_copy(update={"draft_id": did}))
             continue
@@ -396,7 +364,7 @@ def dedupe_candidates(candidates: Iterable[CandidateLead]) -> list[CandidateLead
 
 
 def leads_from_people_gap_sources(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     aliases: list[OrgAlias],
     sources: list[SourceRef],
 ) -> list[CandidateLead]:
@@ -405,7 +373,7 @@ def leads_from_people_gap_sources(
         return []
     from pipeline.contact_mining import _dedupe_routes, _extract_routes_from_text
 
-    key = hotel_key_from_org(hotel)
+    key = corp_key_from_org(corp)
     out: list[CandidateLead] = []
     seen_url: set[str] = set()
 
@@ -420,7 +388,7 @@ def leads_from_people_gap_sources(
         lu = url.lower()
 
         if "linkedin.com/in/" in lu:
-            cand = candidate_from_linkedin_source(ref, hotel)
+            cand = candidate_from_linkedin_source(ref, corp)
             if not cand:
                 continue
             merged_routes = _dedupe_routes(list(cand.contact_routes) + routes)
@@ -447,7 +415,7 @@ def leads_from_people_gap_sources(
         else:
             continue
 
-        rel: RelationshipConfidence = relationship_confidence_for_draft(draft, hotel, aliases, [ref])
+        rel: RelationshipConfidence = relationship_confidence_for_draft(draft, corp, aliases, [ref])
         if rel == "reject":
             continue
 
@@ -486,14 +454,17 @@ def domain_from_url(url: str) -> str:
     return (p.netloc or "").lower().lstrip("www.")
 
 
-def initial_hotel_from_url(input_url: str) -> HotelOrg:
+def initial_corp_from_url(input_url: str) -> CorpOrg:
     u = input_url.strip()
     if not u.startswith(("http://", "https://")):
         u = "https://" + u
     d = domain_from_url(u)
-    return HotelOrg(
+    return CorpOrg(
         input_url=u,
-        property_name=None,
         domains=[d] if d else [],
         evidence=[],
     )
+
+
+# backward compat — exa_discovery imports initial_hotel_from_url until Task 4
+initial_hotel_from_url = initial_corp_from_url
