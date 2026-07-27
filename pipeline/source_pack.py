@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from pipeline.config import PipelineConfig
-from pipeline.models import CandidateLead, HotelOrg, SourceRef
+from pipeline.models import CandidateLead, CorpOrg, SourceRef
 
 
 def _trim(text: str | None, max_chars: int) -> str:
@@ -24,7 +24,7 @@ def _norm_key(name: str, title: str | None) -> str:
 
 
 def build_source_pack(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     candidates: list[CandidateLead],
     orphan_sources: list[SourceRef],
     config: PipelineConfig,
@@ -79,19 +79,18 @@ def build_source_pack(
             }
         )
 
-    hotel_blob = {
-        "input_url": hotel.input_url,
-        "canonical_name": hotel.canonical_name,
-        "property_name": hotel.property_name,
-        "brand_name": hotel.brand_name,
-        "management_company": hotel.management_company,
-        "ownership_group": hotel.ownership_group,
-        "domains": hotel.domains,
-        "location_hint": hotel.location_hint,
+    corp_blob = {
+        "input_url": corp.input_url,
+        "canonical_name": corp.canonical_name,
+        "industry_sector": corp.industry_sector,
+        "hq_country": corp.hq_country,
+        "hq_city": corp.hq_city,
+        "revenue_estimate": corp.revenue_estimate,
+        "domains": corp.domains,
     }
 
     return {
-        "hotel": hotel_blob,
+        "corp": corp_blob,
         "candidate_groups": groups,
         "orphan_sources": orphan_block[:200],
     }

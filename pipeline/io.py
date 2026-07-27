@@ -11,7 +11,7 @@ from typing import Any
 from pipeline.models import (
     CandidateDraft,
     CandidateLead,
-    HotelOrg,
+    CorpOrg,
     OrgAlias,
     PipelineRunResult,
     PipelineTelemetry,
@@ -63,7 +63,7 @@ def write_run_artifacts(base_out: Path, run_id: str, result: PipelineRunResult, 
 def build_pipeline_ui_json(
     *,
     input_url: str,
-    resolved_org: HotelOrg,
+    resolved_org: CorpOrg,
     aliases: list[OrgAlias],
     candidates: list[CandidateLead],
     rejected_candidates: list[CandidateDraft],

@@ -1,7 +1,7 @@
-"""Exa-first hotel stakeholder sourcing pipeline (human-in-loop review)."""
+"""Grok-led SSA executive sourcing pipeline."""
 
-from pipeline.models import CandidateLead, HotelOrg, PipelineRunResult
+from pipeline.models import CandidateLead, CorpOrg, PipelineRunResult
 
-__all__ = ["CandidateLead", "HotelOrg", "PipelineRunResult", "__version__"]
+__all__ = ["CandidateLead", "CorpOrg", "PipelineRunResult", "__version__"]
 
 __version__ = "0.1.0"

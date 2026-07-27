@@ -6,12 +6,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from pipeline.candidates import classify_role_family, classify_role_tier, hotel_key_from_org, make_candidate_id
+from pipeline.candidates import classify_role_family, classify_role_tier, corp_key_from_org, make_candidate_id
 from pipeline.config import PipelineConfig
 from pipeline.models import (
     CandidateLead,
     ContactRoute,
-    HotelOrg,
+    CorpOrg,
     RoleConfidence,
     RoleFamily,
     RoleTier,
@@ -101,30 +101,30 @@ def _needs_mining(routes: list[ContactRoute], tier: RoleTier) -> bool:
     return not has_direct
 
 
-def build_validation_prompt(hotel: HotelOrg, chunk: dict[str, Any]) -> str:
-    rules = """You validate hotel stakeholder evidence.
+def build_validation_prompt(corp: CorpOrg, chunk: dict[str, Any]) -> str:
+    rules = """You validate executive stakeholder evidence.
 Use ONLY the supplied JSON evidence. Do not invent emails, phone numbers, employers, titles, or URLs.
 If uncertain, set needs_human_review true and current_role_confidence low or medium.
 Reject unrelated people, vendors, or clear ex-employees (set reject true).
 Keep senior roles even when contact data is missing.
 Return strict JSON matching the response schema (candidates array)."""
-    body = json.dumps({"hotel": chunk.get("hotel"), "candidate_groups": chunk.get("candidate_groups", [])}, ensure_ascii=False)
+    body = json.dumps({"corp": chunk.get("corp"), "candidate_groups": chunk.get("candidate_groups", [])}, ensure_ascii=False)
     return f"{rules}\n\n--- EVIDENCE ---\n{body}"
 
 
 def _chunk_pack(full: dict[str, Any], size: int) -> list[dict[str, Any]]:
-    hotel = full.get("hotel", {})
+    corp = full.get("corp", {})
     groups = list(full.get("candidate_groups", []))
     if not groups:
-        return [{"hotel": hotel, "candidate_groups": []}]
+        return [{"corp": corp, "candidate_groups": []}]
     out: list[dict[str, Any]] = []
     for i in range(0, len(groups), size):
-        out.append({"hotel": hotel, "candidate_groups": groups[i : i + size]})
+        out.append({"corp": corp, "candidate_groups": groups[i : i + size]})
     return out
 
 
 def validate_with_grok(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     source_pack: dict[str, Any],
     all_sources: list[SourceRef],
     config: PipelineConfig,
@@ -139,7 +139,7 @@ def validate_with_grok(
     usages: list[dict[str, Any]] = []
 
     if not (xai_api_key or "").strip():
-        return _heuristic_from_pack(hotel, source_pack, pool), usages
+        return _heuristic_from_pack(corp, source_pack, pool), usages
 
     chunks = _chunk_pack(source_pack, config.grok_chunk_size)
     merged: list[CandidateLead] = []
@@ -147,7 +147,7 @@ def validate_with_grok(
 
     for ch in chunks:
         t0 = time.perf_counter()
-        prompt = build_validation_prompt(hotel, ch)
+        prompt = build_validation_prompt(corp, ch)
         chunk_usages: list[dict[str, Any]] = []
         raw, usage = _call_grok_json(prompt, config, key)
         chunk_usages.append(usage)
@@ -177,7 +177,7 @@ def validate_with_grok(
             if p.reject or not p.full_name.strip():
                 continue
             ev = _merge_evidence_for_urls(p.evidence_urls, pool)
-            hk = hotel_key_from_org(hotel)
+            hk = corp_key_from_org(corp)
             cid = make_candidate_id(hk, p.full_name, p.title)
             routes = list(p.contact_routes)
             mining = p.needs_contact_mining or _needs_mining(routes, p.role_tier)
@@ -201,7 +201,7 @@ def validate_with_grok(
             )
 
     if not merged:
-        return _heuristic_from_pack(hotel, source_pack, pool), usages
+        return _heuristic_from_pack(corp, source_pack, pool), usages
     return merged, usages
 
 
@@ -223,12 +223,12 @@ def _call_grok_json(user_text: str, config: PipelineConfig, api_key: str) -> tup
 
 
 def _heuristic_from_pack(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     pack: dict[str, Any],
     pool: dict[str, SourceRef],
 ) -> list[CandidateLead]:
     out: list[CandidateLead] = []
-    hk = hotel_key_from_org(hotel)
+    hk = corp_key_from_org(corp)
     for g in pack.get("candidate_groups", []) or []:
         names = g.get("name_hints") or []
         titles = g.get("title_hints") or []

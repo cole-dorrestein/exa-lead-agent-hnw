@@ -6,12 +6,12 @@ from typing import Any
 from pipeline.candidates import candidate_from_linkedin_source, dedupe_candidates
 from pipeline.config import PipelineConfig
 from pipeline.exa_discovery import ExaClientProtocol, _item_to_source, _result_items, _search_with_optional_category
-from pipeline.models import CandidateLead, HotelOrg, SourceRef
+from pipeline.models import CandidateLead, CorpOrg, SourceRef
 from pipeline.telemetry import record_exa_stage
 
 
 def merge_linkedin(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     candidates: list[CandidateLead],
     config: PipelineConfig,
     exa_client: ExaClientProtocol | None,
@@ -20,15 +20,13 @@ def merge_linkedin(
     if config.skip_linkedin or exa_client is None:
         return candidates
 
-    name_hint = hotel.property_name or hotel.canonical_name or ""
+    name_hint = corp.canonical_name or ""
     extra: list[CandidateLead] = []
 
     queries = [
         f'"{name_hint}" "general manager" site:linkedin.com/in',
         f'"{name_hint}" "director of sales" site:linkedin.com/in',
     ]
-    if hotel.management_company:
-        queries.append(f'"{hotel.management_company}" "{name_hint}" site:linkedin.com/in')
 
     pool_sources: list[SourceRef] = []
     for q in queries:
@@ -38,7 +36,7 @@ def merge_linkedin(
             src = _item_to_source(it, q)
             if src.url:
                 pool_sources.append(src)
-                cand = candidate_from_linkedin_source(src, hotel)
+                cand = candidate_from_linkedin_source(src, corp)
                 if cand:
                     extra.append(cand)
         record_exa_stage(

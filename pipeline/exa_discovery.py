@@ -7,10 +7,10 @@ from urllib.parse import urlparse
 from pipeline.candidates import (
     candidate_from_linkedin_source,
     domain_from_url,
-    initial_hotel_from_url,
+    initial_corp_from_url,
 )
 from pipeline.config import PipelineConfig
-from pipeline.models import CandidateLead, HotelOrg, SourceRef
+from pipeline.models import CandidateLead, CorpOrg, SourceRef
 from pipeline.telemetry import record_exa_stage
 
 
@@ -65,26 +65,26 @@ def _search_with_optional_category(
     return client.search(query, num_results=num_results)
 
 
-def org_resolution_queries(hotel: HotelOrg) -> list[str]:
-    name = hotel.property_name or hotel.canonical_name or ""
-    dom = hotel.domains[0] if hotel.domains else domain_from_url(hotel.input_url)
+def org_resolution_queries(corp: CorpOrg) -> list[str]:
+    name = corp.canonical_name or ""
+    dom = corp.domains[0] if corp.domains else domain_from_url(corp.input_url)
     q: list[str] = []
     if name:
-        q.append(f'"{name}" hotel ownership')
+        q.append(f'"{name}" ownership')
         q.append(f'"{name}" "managed by"')
         q.append(f'"{name}" "owned by"')
-        q.append(f'"{name}" "part of" hotel group')
+        q.append(f'"{name}" "part of" group')
     if dom:
         q.append(f"site:{dom} leadership team")
         q.append(f"site:{dom} contact")
-    q.append(f'"{dom}" hotel management company')
+    q.append(f'"{dom}" management company')
     return q[:8]
 
 
-def role_discovery_queries(hotel: HotelOrg) -> list[str]:
-    name = hotel.property_name or hotel.canonical_name or dom_hint(hotel)
+def role_discovery_queries(corp: CorpOrg) -> list[str]:
+    name = corp.canonical_name or dom_hint(corp)
     if not name:
-        name = dom_hint(hotel)
+        name = dom_hint(corp)
     queries = [
         f'"{name}" "general manager"',
         f'"{name}" "managing director"',
@@ -103,40 +103,43 @@ def role_discovery_queries(hotel: HotelOrg) -> list[str]:
     return queries
 
 
-def dom_hint(hotel: HotelOrg) -> str:
-    if hotel.domains:
-        return hotel.domains[0]
-    return domain_from_url(hotel.input_url)
+def dom_hint(corp: CorpOrg) -> str:
+    if corp.domains:
+        return corp.domains[0]
+    return domain_from_url(corp.input_url)
 
 
 def discover(
-    hotel_url: str,
+    corp_url: str,
     config: PipelineConfig,
     exa_client: ExaClientProtocol | None,
     telemetry: Any,
-) -> tuple[HotelOrg, list[SourceRef], list[CandidateLead]]:
+) -> tuple[CorpOrg, list[SourceRef], list[CandidateLead]]:
     """
-    Run Exa searches until caps; return hotel org (best-effort), flat sources, LinkedIn-derived candidates.
+    Run Exa searches until caps; return corp org (best-effort), flat sources, LinkedIn-derived candidates.
     """
-    hotel = initial_hotel_from_url(hotel_url)
-    parsed = urlparse(hotel.input_url)
-    host = (parsed.netloc or "").lower()
-    if host.startswith("www."):
-        host = host[4:]
-    hotel.property_name = host.split(".")[0].replace("-", " ").title() if host else None
+    corp = initial_corp_from_url(corp_url)
+    if not corp.canonical_name:
+        parsed = urlparse(corp.input_url)
+        host = (parsed.netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        corp = corp.model_copy(
+            update={"canonical_name": host.split(".")[0].replace("-", " ").title() if host else None}
+        )
 
     all_sources: list[SourceRef] = []
     candidates: list[CandidateLead] = []
 
     if exa_client is None:
-        return hotel, all_sources, candidates
+        return corp, all_sources, candidates
 
     search_cap = config.exa_search_cap()
     searches_done = 0
 
     queries: list[str] = []
-    queries.extend(org_resolution_queries(hotel))
-    queries.extend(role_discovery_queries(hotel))
+    queries.extend(org_resolution_queries(corp))
+    queries.extend(role_discovery_queries(corp))
 
     for q in queries:
         if searches_done >= search_cap:
@@ -148,7 +151,7 @@ def discover(
             src = _item_to_source(it, q)
             if src.url:
                 all_sources.append(src)
-                cand = candidate_from_linkedin_source(src, hotel)
+                cand = candidate_from_linkedin_source(src, corp)
                 if cand:
                     candidates.append(cand)
         record_exa_stage(
@@ -159,7 +162,7 @@ def discover(
             seconds=time.perf_counter() - t_search,
         )
 
-    people_q = role_people_queries(hotel)
+    people_q = role_people_queries(corp)
     for q in people_q:
         if searches_done >= search_cap:
             break
@@ -170,7 +173,7 @@ def discover(
             src = _item_to_source(it, q)
             if src.url:
                 all_sources.append(src)
-                cand = candidate_from_linkedin_source(src, hotel)
+                cand = candidate_from_linkedin_source(src, corp)
                 if cand:
                     candidates.append(cand)
         record_exa_stage(
@@ -181,11 +184,11 @@ def discover(
             seconds=time.perf_counter() - t_search,
         )
 
-    return hotel, all_sources, candidates
+    return corp, all_sources, candidates
 
 
-def role_people_queries(hotel: HotelOrg) -> list[str]:
-    name = hotel.property_name or hotel.canonical_name or dom_hint(hotel)
+def role_people_queries(corp: CorpOrg) -> list[str]:
+    name = corp.canonical_name or dom_hint(corp)
     return [
         f"{name} general manager",
         f"{name} director of sales",

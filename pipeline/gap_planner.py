@@ -4,14 +4,14 @@ import re
 from typing import Iterable
 
 from pipeline.grok_discovery import new_job_id
-from pipeline.models import CandidateDraft, ExaJob, GrokDiscoveryResult, HotelOrg, OrgAlias
+from pipeline.models import CandidateDraft, CorpOrg, ExaJob, GrokDiscoveryResult, OrgAlias
 
 
 def _norm(s: str | None) -> str:
     return (s or "").strip()
 
 
-def _alias_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
+def _alias_strings(corp: CorpOrg, aliases: list[OrgAlias]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for a in aliases:
@@ -22,7 +22,7 @@ def _alias_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
             continue
         seen.add(v.lower())
         out.append(v)
-    for fld in (hotel.canonical_name,):
+    for fld in (corp.canonical_name,):
         v = _norm(fld)
         if len(v) >= 3 and v.lower() not in seen:
             seen.add(v.lower())
@@ -30,12 +30,12 @@ def _alias_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
     return out
 
 
-def _bare_hostname_alias(hotel: HotelOrg, aliases: list[OrgAlias]) -> bool:
+def _bare_hostname_alias(corp: CorpOrg, aliases: list[OrgAlias]) -> bool:
     """True if best usable anchor looks like hostname token only (weak org resolution)."""
-    pool = _alias_strings(hotel, aliases)
+    pool = _alias_strings(corp, aliases)
     if not pool:
         return True
-    dom = (hotel.domains[0] if hotel.domains else "").lower().split(".")[0]
+    dom = (corp.domains[0] if corp.domains else "").lower().split(".")[0]
     if not dom:
         return False
     token = dom.replace("-", "").replace("_", "")
@@ -57,7 +57,7 @@ def _people_gap_jobs(primary: str, titles_blob: str, max_gap: int) -> list[ExaJo
         (("general manager",), f'"{primary}" "general manager"'),
         (("managing director",), f'"{primary}" "managing director"'),
         (("chief executive", "c.e.o", "ceo"), f'"{primary}" CEO OR "chief executive"'),
-        (("owner", "founder", "co-founder"), f'"{primary}" owner OR founder hotel'),
+        (("owner", "founder", "co-founder"), f'"{primary}" owner OR founder'),
         (("commercial director", "chief commercial"), f'"{primary}" "commercial director"'),
         (("director of sales", "sales director"), f'"{primary}" "director of sales"'),
         (
@@ -95,9 +95,9 @@ def plan_exa_jobs(
     Build capped Exa jobs from Grok discovery.
     Returns (jobs, needs_manual_org_review) when org anchor is hostname-weak.
     """
-    hotel = discovery.corp
-    alias_list = _alias_strings(hotel, discovery.aliases)
-    weak_org = _bare_hostname_alias(hotel, discovery.aliases)
+    corp = discovery.corp
+    alias_list = _alias_strings(corp, discovery.aliases)
+    weak_org = _bare_hostname_alias(corp, discovery.aliases)
     if weak_org or not alias_list:
         return [], True
 

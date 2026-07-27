@@ -26,9 +26,9 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _resolved_hotel_name(ui: PipelineUiJson) -> str:
-    hotel = ui.resolved_org
-    return hotel.canonical_name or hotel.property_name or (hotel.domains[0] if hotel.domains else ui.input_url)
+def _resolved_corp_name(ui: PipelineUiJson) -> str:
+    corp = ui.resolved_org
+    return corp.canonical_name or (corp.domains[0] if corp.domains else ui.input_url)
 
 
 def _routes_by_kind(candidate: CandidateLead, kind: str) -> list[ContactRoute]:
@@ -162,7 +162,7 @@ def pipeline_ui_to_enriched_doc(
     generated_at_utc: str | None = None,
 ) -> dict[str, Any]:
     at = generated_at_utc or _now_iso()
-    hotel_name = _resolved_hotel_name(ui)
+    corp_name = _resolved_corp_name(ui)
     return {
         "target_url": ui.input_url,
         "generated_at_utc": at,
@@ -189,7 +189,7 @@ def pipeline_ui_to_enriched_doc(
             "failed": 0,
         },
         "pipeline_v4": ui.model_dump(mode="json"),
-        "contacts": [_legacy_contact(candidate, hotel_name) for candidate in ui.candidates],
+        "contacts": [_legacy_contact(candidate, corp_name) for candidate in ui.candidates],
     }
 
 
@@ -228,11 +228,11 @@ def load_pipeline_artifact(path: Path) -> PipelineUiJson:
     data = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(data, dict) and "resolved_org" in data and "input_url" in data:
         return PipelineUiJson.model_validate(data)
-    if isinstance(data, dict) and "hotel" in data and "candidates" in data:
+    if isinstance(data, dict) and "corp" in data and "candidates" in data:
         pr = PipelineRunResult.model_validate(data)
         return build_pipeline_ui_json(
-            input_url=(pr.hotel.input_url or "").strip() or (data.get("hotel") or {}).get("input_url", ""),
-            resolved_org=pr.hotel,
+            input_url=(pr.corp.input_url or "").strip() or (data.get("corp") or {}).get("input_url", ""),
+            resolved_org=pr.corp,
             aliases=[],
             candidates=pr.candidates,
             rejected_candidates=[],

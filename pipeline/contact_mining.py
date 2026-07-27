@@ -6,7 +6,7 @@ from typing import Any
 
 from pipeline.config import PipelineConfig
 from pipeline.exa_discovery import ExaClientProtocol, _item_to_source, _result_items, _search_with_optional_category
-from pipeline.models import CandidateLead, ContactRoute, HotelOrg
+from pipeline.models import CandidateLead, ContactRoute, CorpOrg
 from pipeline.telemetry import record_exa_stage, record_xai_stage
 
 EMAIL_IN_TEXT = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
@@ -57,7 +57,7 @@ def _extract_routes_from_text(text: str, source_url: str) -> list[ContactRoute]:
 
 
 def mine_contacts(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     candidates: list[CandidateLead],
     config: PipelineConfig,
     exa_client: ExaClientProtocol | None,
@@ -66,7 +66,7 @@ def mine_contacts(
 ) -> list[CandidateLead]:
     if config.skip_contact_mining:
         return candidates
-    name_hint = hotel.property_name or hotel.canonical_name or ""
+    name_hint = corp.canonical_name or ""
     updated: list[CandidateLead] = []
     for c in candidates:
         if not _eligible(c) or _has_strong_contact(c):
@@ -102,7 +102,7 @@ def mine_contacts(
         )
 
     if config.use_xai_for_contact_mining and (xai_api_key or "").strip() and exa_client is not None:
-        updated = _xai_contact_pass(hotel, updated, config, (xai_api_key or "").strip(), telemetry)
+        updated = _xai_contact_pass(corp, updated, config, (xai_api_key or "").strip(), telemetry)
     return updated
 
 
@@ -119,13 +119,13 @@ def _dedupe_routes(routes: list[ContactRoute]) -> list[ContactRoute]:
 
 
 def mine_contacts_v4(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     candidates: list[CandidateLead],
     config: PipelineConfig,
     exa_client: ExaClientProtocol | None,
     telemetry: Any,
 ) -> list[CandidateLead]:
-    """Extract routes from evidence text; optional capped hotel-level site: Exa queries (no per-person search)."""
+    """Extract routes from evidence text; optional capped corp-level site: Exa queries (no per-person search)."""
     if config.skip_contact_mining:
         return candidates
 
@@ -140,7 +140,7 @@ def mine_contacts_v4(
             routes.extend(_extract_routes_from_text(blob, ev.url or ""))
         updated.append(c.model_copy(update={"contact_routes": _dedupe_routes(routes)}))
 
-    dom = hotel.domains[0] if hotel.domains else ""
+    dom = corp.domains[0] if corp.domains else ""
     if not dom or exa_client is None:
         return updated
 
@@ -188,7 +188,7 @@ def mine_contacts_v4(
 
 
 def _xai_contact_pass(
-    hotel: HotelOrg,
+    corp: CorpOrg,
     candidates: list[CandidateLead],
     config: PipelineConfig,
     api_key: str,

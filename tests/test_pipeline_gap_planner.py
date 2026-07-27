@@ -14,13 +14,13 @@ def test_gap_planner_kaya_not_manual() -> None:
     kinds = {j.kind for j in jobs}
     assert "person_verify" in kinds
     assert "people_gap" in kinds
-    # Synthetic draft already has General Manager title → GM people_gap job omitted
+    # Synthetic draft has CEO title → CEO people_gap job omitted, GM gap job is present
 
 
 def test_gap_planner_weak_hostname_stops_exa() -> None:
-    hotel = initial_hotel_from_url("https://Kayagnhlondon.com/")
+    corp = initial_hotel_from_url("https://Kayagnhlondon.com/")
     disc = GrokDiscoveryResult(
-        hotel=hotel,
+        corp=corp,
         aliases=[
             OrgAlias(value="Kayagnhlondon", kind="domain", confidence="medium", source_url=None, quote=None)
         ],
@@ -41,23 +41,24 @@ def test_gap_no_broad_hostname_query() -> None:
 def test_people_gap_adds_general_manager_when_absent() -> None:
     base = synthetic_grok_result_for_tests()
     d0 = base.drafts[0].model_copy(update={"title": "Head of Revenue"})
-    disc = assign_draft_ids(GrokDiscoveryResult(hotel=base.hotel, aliases=base.aliases, drafts=[d0]))
+    disc = assign_draft_ids(GrokDiscoveryResult(corp=base.corp, aliases=base.aliases, drafts=[d0]))
     jobs, _ = plan_exa_jobs(disc, max_jobs=22)
     gm_gap = [j for j in jobs if j.kind == "people_gap" and "general manager" in j.query.lower()]
     assert gm_gap
     assert gm_gap[0].category == "people"
 
 
-def test_people_gap_skips_general_manager_when_title_present() -> None:
+def test_people_gap_skips_ceo_when_title_present() -> None:
+    # Synthetic draft has "Chief Executive Officer" → CEO people_gap job should be omitted
     disc = synthetic_grok_result_for_tests()
     jobs, _ = plan_exa_jobs(disc, max_jobs=22)
-    gm_gap = [j for j in jobs if j.kind == "people_gap" and "general manager" in j.query.lower()]
-    assert not gm_gap
+    ceo_gap = [j for j in jobs if j.kind == "people_gap" and "chief executive" in j.query.lower()]
+    assert not ceo_gap
 
 
 def test_leads_from_people_gap_linkedin_and_email() -> None:
     disc = synthetic_grok_result_for_tests()
-    hotel = disc.hotel
+    hotel = disc.corp
     aliases = list(disc.aliases)
     src_li = SourceRef(
         url="https://www.linkedin.com/in/example-exec",
@@ -74,7 +75,7 @@ def test_leads_from_people_gap_linkedin_and_email() -> None:
 
 def test_leads_from_people_gap_non_linkedin_email_route() -> None:
     disc = synthetic_grok_result_for_tests()
-    hotel = disc.hotel
+    hotel = disc.corp
     aliases = list(disc.aliases)
     src = SourceRef(
         url="https://press.example.com/article",
