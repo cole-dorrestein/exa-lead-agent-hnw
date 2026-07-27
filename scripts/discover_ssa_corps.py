@@ -42,7 +42,7 @@ def extract_domain(url: str) -> str:
             url = "https://" + url
         parsed = urlparse(url)
         netloc = parsed.netloc.lower()
-        return netloc.lstrip("www.") if netloc else ""
+        return netloc[4:] if netloc.startswith("www.") else netloc
     except Exception:
         return ""
 

@@ -100,6 +100,7 @@ def classify_role_tier(title: str | None) -> RoleTier:
         "managing director",
         "group chief",
         "md ",
+        " md",
     )
     if any(_word_in(x, t) for x in _tier1_acronyms) or any(x in t for x in _tier1_phrases):
         return 1

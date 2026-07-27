@@ -18,7 +18,7 @@ def _eligible(c: CandidateLead) -> bool:
         return False
     if c.role_tier in (1, 2):
         return bool(c.needs_contact_mining)
-    if c.role_tier == 3 and c.role_family in ("sales_events", "reservations"):
+    if c.role_tier == 3 and c.role_family == "director_level":
         return bool(c.needs_contact_mining)
     return False
 
@@ -178,7 +178,7 @@ def mine_contacts_v4(
             out2.append(c)
             continue
         if c.role_tier in (1, 2) or (
-            c.role_tier == 3 and c.role_family in ("sales_events", "reservations")
+            c.role_tier == 3 and c.role_family == "director_level"
         ):
             merged = _dedupe_routes(list(c.contact_routes) + shared_routes)
             out2.append(c.model_copy(update={"contact_routes": merged, "needs_contact_mining": False}))

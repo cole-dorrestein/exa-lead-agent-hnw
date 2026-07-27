@@ -26,9 +26,9 @@ def _read_corps_file(path: Path) -> list[str]:
     return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
 
 
-def _run_one(url: str, *, out_dir: Path, cfg: PipelineConfig) -> tuple[str, str]:
+def _run_one(url: str, *, out_dir: Path, cfg: PipelineConfig, no_aggregate_sync: bool = False) -> tuple[str, str]:
     try:
-        res = run_pipeline(url, cfg, out_dir=out_dir)
+        res = run_pipeline(url, cfg, out_dir=out_dir, aggregate_sync=not no_aggregate_sync)
         return url, f"ok candidates={len(res.candidates)}"
     except Exception as exc:
         return url, f"error: {exc}"
@@ -65,7 +65,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Running pipeline for {len(deduped)} corps with {args.workers} workers...")
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(_run_one, u, out_dir=out_dir, cfg=cfg): u for u in deduped}
+        # Tip: for large batch runs, prefer --no-aggregate-sync + one rebuild pass at the end
+        futures = {pool.submit(_run_one, u, out_dir=out_dir, cfg=cfg, no_aggregate_sync=args.no_aggregate_sync): u for u in deduped}
         for fut in as_completed(futures):
             url, status = fut.result()
             print(f"  {url}: {status}")
