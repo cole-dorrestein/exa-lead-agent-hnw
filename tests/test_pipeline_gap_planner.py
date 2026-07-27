@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pipeline.candidates import initial_hotel_from_url, leads_from_people_gap_sources
+from pipeline.candidates import initial_corp_from_url, leads_from_people_gap_sources
 from pipeline.gap_planner import plan_exa_jobs
 from pipeline.grok_discovery import assign_draft_ids, synthetic_grok_result_for_tests
 from pipeline.models import GrokDiscoveryResult, OrgAlias, SourceRef
@@ -18,7 +18,7 @@ def test_gap_planner_kaya_not_manual() -> None:
 
 
 def test_gap_planner_weak_hostname_stops_exa() -> None:
-    corp = initial_hotel_from_url("https://Kayagnhlondon.com/")
+    corp = initial_corp_from_url("https://Kayagnhlondon.com/")
     disc = GrokDiscoveryResult(
         corp=corp,
         aliases=[

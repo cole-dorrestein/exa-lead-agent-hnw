@@ -18,12 +18,8 @@ from pipeline.models import (
     SourceRef,
     SourceType,
     corp_key_from_org,
-    hotel_key_from_org,   # keep — used by grok_validation until Task 4
     make_candidate_id,
 )
-
-# backward compat alias — used by exa_discovery until Task 4
-HotelOrg = CorpOrg
 
 
 def normalize_name(name: str) -> str:
@@ -465,6 +461,3 @@ def initial_corp_from_url(input_url: str) -> CorpOrg:
         evidence=[],
     )
 
-
-# backward compat — exa_discovery imports initial_hotel_from_url until Task 4
-initial_hotel_from_url = initial_corp_from_url

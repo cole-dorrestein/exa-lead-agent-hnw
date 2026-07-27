@@ -41,9 +41,6 @@ class CorpOrg(BaseModel):
     evidence: list[SourceRef] = Field(default_factory=list)
 
 
-# backward compat — legacy/ and contact_enrichment/ import HotelOrg; do not remove until Task 5
-HotelOrg = CorpOrg
-
 
 class ContactRoute(BaseModel):
     kind: ContactKind
@@ -198,6 +195,3 @@ def corp_key_from_org(corp: CorpOrg) -> str:
     p = urlparse(corp.input_url)
     return (p.netloc or "nohost").lower()
 
-
-# backward compat alias — remove in Task 5
-hotel_key_from_org = corp_key_from_org

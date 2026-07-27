@@ -16,7 +16,7 @@ from pipeline.legacy_export import (
 from pipeline.models import (
     CandidateLead,
     ContactRoute,
-    HotelOrg,
+    CorpOrg,
     PipelineTelemetry,
     PipelineUiJson,
     SourceRef,
@@ -25,10 +25,9 @@ from scripts.import_pipeline_outputs import import_pipeline_outputs, select_late
 
 
 def _sample_ui() -> PipelineUiJson:
-    hotel = HotelOrg(
+    hotel = CorpOrg(
         input_url="examplehotel.com",
         canonical_name="Example Hotel",
-        property_name="Example Hotel",
         domains=["examplehotel.com"],
     )
     candidate = CandidateLead(
@@ -37,7 +36,7 @@ def _sample_ui() -> PipelineUiJson:
         title="General Manager",
         company="Example Hotel",
         role_tier=1,
-        role_family="gm_ops",
+        role_family="c_suite",
         current_role_confidence="high",
         relationship_confidence="high",
         linkedin_url="https://uk.linkedin.com/in/alex-person",
@@ -156,7 +155,7 @@ def test_run_pipeline_persists_ui_when_sync_enabled(monkeypatch: pytest.MonkeyPa
     d = type(
         "D",
         (),
-        {"hotel": sample.resolved_org, "aliases": [], "drafts": []},
+        {"corp": sample.resolved_org, "aliases": [], "drafts": []},
     )()
     monkeypatch.setattr(
         cli,
@@ -229,7 +228,7 @@ def test_load_pipeline_artifact_accepts_run_result_dict(tmp_path: Path) -> None:
     from pipeline.models import PipelineRunResult
 
     pr = PipelineRunResult(
-        hotel=out.resolved_org,
+        corp=out.resolved_org,
         candidates=[],
         review_rows=[],
         telemetry=out.telemetry,
@@ -238,5 +237,5 @@ def test_load_pipeline_artifact_accepts_run_result_dict(tmp_path: Path) -> None:
     f = tmp_path / "pr.json"
     f.write_text(pr.model_dump_json(indent=2), encoding="utf-8")
     ui = load_pipeline_artifact(f)
-    assert ui.resolved_org.input_url == pr.hotel.input_url
-    assert ui.input_url == pr.hotel.input_url
+    assert ui.resolved_org.input_url == pr.corp.input_url
+    assert ui.input_url == pr.corp.input_url
