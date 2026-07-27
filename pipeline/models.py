@@ -7,16 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SourceType = Literal["hotel_site", "linkedin", "press", "directory", "company_site", "social", "other"]
-RoleFamily = Literal[
-    "owner_exec",
-    "gm_ops",
-    "commercial_revenue",
-    "sales_events",
-    "reservations",
-    "it_digital",
-    "procurement_finance",
-    "other",
-]
+RoleFamily = Literal["c_suite", "vp_level", "director_level", "board", "owner_exec", "other"]
 RoleTier = Literal[1, 2, 3, 4]
 RoleConfidence = Literal["high", "medium", "low", "conflict"]
 RelationshipConfidence = Literal["high", "medium", "low", "reject"]
@@ -38,16 +29,20 @@ class SourceRef(BaseModel):
     score: float | None = None
 
 
-class HotelOrg(BaseModel):
+class CorpOrg(BaseModel):
     input_url: str
     canonical_name: str | None = None
-    property_name: str | None = None
-    brand_name: str | None = None
-    management_company: str | None = None
-    ownership_group: str | None = None
-    location_hint: str | None = None
+    industry_sector: str | None = None
+    hq_country: str | None = None
+    hq_city: str | None = None
+    revenue_estimate: str | None = None
+    employee_count_estimate: str | None = None
     domains: list[str] = Field(default_factory=list)
     evidence: list[SourceRef] = Field(default_factory=list)
+
+
+# backward compat — legacy/ and contact_enrichment/ import HotelOrg; do not remove until Task 5
+HotelOrg = CorpOrg
 
 
 class ContactRoute(BaseModel):
@@ -82,7 +77,7 @@ class CandidateDraft(BaseModel):
 
 
 class GrokDiscoveryResult(BaseModel):
-    hotel: HotelOrg
+    hotel: CorpOrg
     aliases: list[OrgAlias] = Field(default_factory=list)
     drafts: list[CandidateDraft] = Field(default_factory=list)
 
@@ -116,8 +111,8 @@ class CandidateLead(BaseModel):
 
 
 class ReviewRow(BaseModel):
-    hotel_name: str
-    hotel_url: str
+    corp_name: str
+    corp_url: str
     candidate_id: str
     full_name: str
     title: str | None = None
@@ -155,7 +150,7 @@ class PipelineTelemetry(BaseModel):
 
 
 class PipelineRunResult(BaseModel):
-    hotel: HotelOrg
+    corp: CorpOrg
     candidates: list[CandidateLead]
     review_rows: list[ReviewRow]
     telemetry: PipelineTelemetry
@@ -166,7 +161,7 @@ class PipelineUiJson(BaseModel):
     """Single UI-ready artifact for pipeline v4."""
 
     input_url: str
-    resolved_org: HotelOrg
+    resolved_org: CorpOrg
     aliases: list[OrgAlias]
     candidates: list[CandidateLead]
     rejected_candidates: list[CandidateDraft] = Field(default_factory=list)
@@ -182,11 +177,11 @@ def _slug(s: str) -> str:
     return re.sub(r"_+", "_", s).strip("_") or "x"
 
 
-def make_candidate_id(hotel_key: str, full_name: str, title: str | None) -> str:
-    """Stable id from hotel scope + normalized name + title."""
+def make_candidate_id(corp_key: str, full_name: str, title: str | None) -> str:
+    """Stable id from corp scope + normalized name + title."""
     parts = "|".join(
         [
-            _slug(hotel_key),
+            _slug(corp_key),
             _slug(full_name or ""),
             _slug(title or ""),
         ]
@@ -195,10 +190,14 @@ def make_candidate_id(hotel_key: str, full_name: str, title: str | None) -> str:
     return f"c_{h}"
 
 
-def hotel_key_from_org(hotel: HotelOrg) -> str:
-    if hotel.domains:
-        return hotel.domains[0]
+def corp_key_from_org(corp: CorpOrg) -> str:
+    if corp.domains:
+        return corp.domains[0]
     from urllib.parse import urlparse
 
-    p = urlparse(hotel.input_url)
+    p = urlparse(corp.input_url)
     return (p.netloc or "nohost").lower()
+
+
+# backward compat alias — remove in Task 5
+hotel_key_from_org = corp_key_from_org

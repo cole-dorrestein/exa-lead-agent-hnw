@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pipeline.models import CandidateLead, ContactRoute, HotelOrg, ReviewRow
+from pipeline.models import CandidateLead, ContactRoute, CorpOrg, ReviewRow
 
 
 def _best_email(routes: list[ContactRoute]) -> str | None:
@@ -39,10 +39,6 @@ def _evidence_summary(c: CandidateLead) -> str:
 
 
 def _tier_sort_key(c: CandidateLead) -> tuple[int, int, str]:
-    """
-    Sort key ascending = better rows first (human review board order).
-    Bands: T1 strong, T2 strong, T1 weak, T3 commercial-ish, rest.
-    """
     conf = c.current_role_confidence
     strong = conf in ("high", "medium")
     tier = int(c.role_tier)
@@ -52,25 +48,24 @@ def _tier_sort_key(c: CandidateLead) -> tuple[int, int, str]:
         band = 1
     elif tier == 1:
         band = 2
-    elif tier == 3 and c.role_family in ("sales_events", "reservations", "commercial_revenue"):
+    elif tier == 3 and c.role_family == "director_level":
         band = 3
     else:
         band = 4
     conf_order = {"high": 0, "medium": 1, "low": 2, "conflict": 3}
-    # Deprioritize contact-fill vs role: only use name as stable tie-break
     return (band, conf_order.get(conf, 2), c.full_name.lower())
 
 
-def build_review_rows(hotel: HotelOrg, candidates: list[CandidateLead]) -> list[ReviewRow]:
-    hotel_name = hotel.canonical_name or hotel.property_name or (hotel.domains[0] if hotel.domains else hotel.input_url)
+def build_review_rows(corp: CorpOrg, candidates: list[CandidateLead]) -> list[ReviewRow]:
+    corp_name = corp.canonical_name or (corp.domains[0] if corp.domains else corp.input_url)
     sorted_cs = sorted(candidates, key=_tier_sort_key)
     rows: list[ReviewRow] = []
     for c in sorted_cs:
         ev_urls = ";".join(e.url for e in c.evidence if e.url)
         rows.append(
             ReviewRow(
-                hotel_name=str(hotel_name),
-                hotel_url=hotel.input_url,
+                corp_name=str(corp_name),
+                corp_url=corp.input_url,
                 candidate_id=c.candidate_id,
                 full_name=c.full_name,
                 title=c.title,
