@@ -22,7 +22,7 @@ def _alias_strings(hotel: HotelOrg, aliases: list[OrgAlias]) -> list[str]:
             continue
         seen.add(v.lower())
         out.append(v)
-    for fld in (hotel.canonical_name, hotel.property_name, hotel.brand_name):
+    for fld in (hotel.canonical_name,):
         v = _norm(fld)
         if len(v) >= 3 and v.lower() not in seen:
             seen.add(v.lower())
@@ -95,7 +95,7 @@ def plan_exa_jobs(
     Build capped Exa jobs from Grok discovery.
     Returns (jobs, needs_manual_org_review) when org anchor is hostname-weak.
     """
-    hotel = discovery.hotel
+    hotel = discovery.corp
     alias_list = _alias_strings(hotel, discovery.aliases)
     weak_org = _bare_hostname_alias(hotel, discovery.aliases)
     if weak_org or not alias_list:

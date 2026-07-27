@@ -5,8 +5,8 @@ import time
 import uuid
 from typing import Any
 
-from pipeline.candidates import hotel_key_from_org, make_candidate_id
-from pipeline.models import GrokDiscoveryResult, HotelOrg
+from pipeline.candidates import corp_key_from_org, make_candidate_id
+from pipeline.models import CorpOrg, GrokDiscoveryResult
 from pipeline.telemetry import record_xai_stage
 
 try:
@@ -37,23 +37,25 @@ def _usage_to_dict(usage: Any) -> dict[str, Any]:
     return out or {"repr": repr(usage)}
 
 
-def build_grok_discovery_prompt(hotel_url: str) -> str:
-    return f"""Hotel URL (only input): {hotel_url}
+def build_grok_discovery_prompt(corp_url: str) -> str:
+    return f"""Company URL (only input): {corp_url}
 
-Tasks (use web_search and x_search; prefer official sites, press, company pages; LinkedIn allowed as evidence):
+Tasks (use web_search and x_search; prefer official company sites, press releases, LinkedIn, regulatory filings, annual reports):
 
-1) Resolve the operating hotel: canonical property name, brand, management company, ownership where public sources support it.
-2) Emit aliases (property / brand / management / ownership / domain / historical) with confidence high|medium|low, optional source_url and short quote.
-3) Discover 12–30 public decision-maker drafts (name + title + company when known). Include senior roles without direct contacts when evidence supports the role at this property.
-4) For each draft: evidence as SourceRef-style entries (url required when claiming a fact). contact_routes only when explicitly present in source text (never invent email/phone). linkedin_url when clearly the same person. confidence_hint high|medium|low and optional uncertainty string.
+1) Resolve the company: canonical name, industry sector, HQ country and city, revenue estimate, employee count estimate.
+2) Emit aliases (trading name / registered name / domain / historical names) with confidence high|medium|low, optional source_url and short quote.
+3) Discover all C-suite officers, VPs, and Directors at this company (aim for 12-30 people).
+   Include: CEO, CFO, COO, CTO, CMO, CISO, CHRO, Managing Director, VP-level (Vice President, SVP, EVP), Director-level.
+   Exclude: regional heads, middle management, assistants.
+4) For each person: evidence as SourceRef-style entries (url required when claiming a fact). contact_routes only when explicitly present in source text (never invent email or phone). linkedin_url when clearly the same person. confidence_hint high|medium|low and optional uncertainty string.
 
-Rules: never fabricate emails or phone numbers. If the best name you can anchor searches on is basically the bare hostname (e.g. Kayagnhlondon) and you cannot find a better commercial property name, still return best-effort hotel + aliases but mark uncertainty.
+Rules: never fabricate emails or phone numbers. Focus on people who are currently in these roles, not former executives.
 
-Return JSON matching the GrokDiscoveryResult schema (fields: hotel, aliases, drafts)."""
+Return JSON matching the GrokDiscoveryResult schema (fields: corp, aliases, drafts)."""
 
 
 def assign_draft_ids(result: GrokDiscoveryResult) -> GrokDiscoveryResult:
-    key = hotel_key_from_org(result.hotel)
+    key = corp_key_from_org(result.corp)
     out_drafts = []
     for d in result.drafts:
         did = d.draft_id or make_candidate_id(key, d.full_name, d.title)
@@ -62,7 +64,7 @@ def assign_draft_ids(result: GrokDiscoveryResult) -> GrokDiscoveryResult:
 
 
 def run_grok_discovery(
-    hotel_url: str,
+    corp_url: str,
     api_key: str,
     telemetry: Any,
     *,
@@ -82,14 +84,14 @@ def run_grok_discovery(
         max_turns=max_turns,
         response_format=GrokDiscoveryResult,
     )
-    chat.append(user(build_grok_discovery_prompt(hotel_url.strip())))
+    chat.append(user(build_grok_discovery_prompt(corp_url.strip())))
     final = chat.sample()
     raw = (final.content or "").strip()
     if not raw:
         raise ValueError("Empty Grok discovery response")
     parsed = GrokDiscoveryResult.model_validate_json(raw)
-    if not parsed.hotel.input_url:
-        parsed = parsed.model_copy(update={"hotel": parsed.hotel.model_copy(update={"input_url": hotel_url.strip()})})
+    if not parsed.corp.input_url:
+        parsed = parsed.model_copy(update={"corp": parsed.corp.model_copy(update={"input_url": corp_url.strip()})})
     parsed = assign_draft_ids(parsed)
     usage = _usage_to_dict(getattr(final, "usage", None))
     record_xai_stage(
@@ -102,11 +104,11 @@ def run_grok_discovery(
     return parsed, usage
 
 
-def grok_discovery_dry_run_plan(hotel_url: str) -> dict[str, Any]:
+def grok_discovery_dry_run_plan(corp_url: str) -> dict[str, Any]:
     """Deterministic plan blob for CLI dry-run (no API keys)."""
     return {
         "pipeline_version": 4,
-        "hotel_url": hotel_url,
+        "corp_url": corp_url,
         "stages": ["grok_discovery", "gap_planner", "exa_verify", "local_validation", "contact_routes"],
         "grok_model": GROK_DISCOVERY_MODEL,
         "exa_policy": "capped_jobs_only",
@@ -120,40 +122,38 @@ def parse_grok_discovery_json(data: str | dict[str, Any]) -> GrokDiscoveryResult
     return assign_draft_ids(GrokDiscoveryResult.model_validate(obj))
 
 
-def synthetic_grok_result_for_tests(hotel_url: str = "https://kayagnhlondon.com/") -> GrokDiscoveryResult:
-    """Minimal fixture: Kaya-style alias + one draft (unit tests)."""
-    hotel = HotelOrg(
-        input_url=hotel_url,
-        canonical_name="Kaya Great Northern Hotel",
-        property_name="Kaya Great Northern Hotel",
-        brand_name=None,
-        management_company=None,
-        ownership_group=None,
-        domains=["kayagnhlondon.com"],
+def synthetic_grok_result_for_tests(corp_url: str = "https://zenithbank.com/") -> GrokDiscoveryResult:
+    """Minimal fixture: Zenith Bank alias + one draft (unit tests)."""
+    corp = CorpOrg(
+        input_url=corp_url,
+        canonical_name="Zenith Bank",
+        industry_sector="banking",
+        hq_country="Nigeria",
+        domains=["zenithbank.com"],
         evidence=[],
     )
     from pipeline.models import CandidateDraft, OrgAlias
 
     aliases = [
         OrgAlias(
-            value="Kaya Great Northern Hotel",
+            value="Zenith Bank Nigeria",
             kind="property",
             confidence="high",
-            source_url="https://kayagnhlondon.com/",
-            quote="Kaya Great Northern Hotel",
+            source_url=corp_url,
+            quote="Zenith Bank Nigeria",
         ),
     ]
     drafts = [
         CandidateDraft(
-            full_name="Example GM",
-            title="General Manager",
-            company="Kaya Great Northern Hotel",
+            full_name="Example CEO",
+            title="Chief Executive Officer",
+            company="Zenith Bank",
             evidence=[],
             confidence_hint="medium",
             uncertainty=None,
         )
     ]
-    return assign_draft_ids(GrokDiscoveryResult(hotel=hotel, aliases=aliases, drafts=drafts))
+    return assign_draft_ids(GrokDiscoveryResult(corp=corp, aliases=aliases, drafts=drafts))
 
 
 def new_job_id() -> str:

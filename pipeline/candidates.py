@@ -283,7 +283,7 @@ def promote_discovery_to_candidates(
     exa_by_draft: dict[str, list[SourceRef]],
 ) -> tuple[list[CandidateLead], list[CandidateDraft]]:
     """Turn drafts into CandidateLead rows or rejected drafts from local relationship checks."""
-    corp = discovery.hotel
+    corp = discovery.corp
     kept: list[CandidateLead] = []
     rejected: list[CandidateDraft] = []
     key = corp_key_from_org(corp)

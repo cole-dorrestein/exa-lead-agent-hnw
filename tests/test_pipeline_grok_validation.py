@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from pipeline.config import PipelineConfig
 from pipeline.grok_validation import validate_with_grok
-from pipeline.models import HotelOrg, PipelineTelemetry, SourceRef
+from pipeline.models import CorpOrg, PipelineTelemetry, SourceRef
 
 
 def test_validate_without_xai_heuristic() -> None:
-    hotel = HotelOrg(input_url="https://h.example", domains=["h.example"])
+    corp = CorpOrg(input_url="https://h.example", domains=["h.example"])
     ref = SourceRef(url="https://www.linkedin.com/in/x", title="Pat - GM", snippet="Pat is GM")
     pack = {
-        "hotel": {"input_url": hotel.input_url},
+        "hotel": {"input_url": corp.input_url},
         "candidate_groups": [
             {
                 "candidate_key": "pat|gm",
@@ -22,7 +22,7 @@ def test_validate_without_xai_heuristic() -> None:
     }
     tel = PipelineTelemetry()
     out, usages = validate_with_grok(
-        hotel,
+        corp,
         pack,
         [ref],
         PipelineConfig(),

@@ -10,7 +10,7 @@ from scripts._repo_dotenv import load_repo_dotenv
 
 from pipeline.candidates import (
     dedupe_candidates,
-    initial_hotel_from_url,
+    initial_corp_from_url,
     leads_from_people_gap_sources,
     promote_discovery_to_candidates,
 )
@@ -40,7 +40,7 @@ def _load_exa_client():
 
 
 def run_pipeline(
-    hotel_url: str,
+    corp_url: str,
     config: PipelineConfig,
     *,
     out_dir: Path,
@@ -53,8 +53,8 @@ def run_pipeline(
     tel = new_telemetry()
 
     if dry_run:
-        hotel = initial_hotel_from_url(hotel_url)
-        discovery = GrokDiscoveryResult(hotel=hotel, aliases=[], drafts=[])
+        corp = initial_corp_from_url(corp_url)
+        discovery = GrokDiscoveryResult(corp=corp, aliases=[], drafts=[])
         jobs, manual = plan_exa_jobs(
             discovery,
             max_jobs=config.exa_search_cap(),
@@ -62,12 +62,12 @@ def run_pipeline(
             max_person_verify_searches=config.max_person_verify_searches,
         )
         plan = {
-            **grok_discovery_dry_run_plan(hotel_url),
+            **grok_discovery_dry_run_plan(corp_url),
             "gap_jobs": [j.model_dump() for j in jobs],
             "needs_manual_org_review": manual,
         }
         return PipelineRunResult(
-            hotel=hotel,
+            corp=corp,
             candidates=[],
             review_rows=[],
             telemetry=tel,
@@ -78,7 +78,7 @@ def run_pipeline(
     if not xai_key:
         raise ValueError("XAI_API_KEY is required for pipeline v4 (Grok discovery)")
 
-    discovery, _usages = run_grok_discovery(hotel_url, xai_key, tel)
+    discovery, _usages = run_grok_discovery(corp_url, xai_key, tel)
     jobs, manual_review = plan_exa_jobs(
         discovery,
         max_jobs=config.exa_search_cap(),
@@ -100,28 +100,28 @@ def run_pipeline(
     rough, rejected_drafts = promote_discovery_to_candidates(discovery, exa_by)
     global_src = exa_by.get("_global") or []
     if global_src:
-        rough.extend(leads_from_people_gap_sources(discovery.hotel, list(discovery.aliases), global_src))
+        rough.extend(leads_from_people_gap_sources(discovery.corp, list(discovery.aliases), global_src))
     rough = dedupe_candidates(rough[: config.max_candidates])
 
-    mined = mine_contacts_v4(discovery.hotel, rough, config, exa, tel)
-    rows = build_review_rows(discovery.hotel, mined)
+    mined = mine_contacts_v4(discovery.corp, rough, config, exa, tel)
+    rows = build_review_rows(discovery.corp, mined)
 
     ui = build_pipeline_ui_json(
-        input_url=hotel_url.strip(),
-        resolved_org=discovery.hotel,
+        input_url=corp_url.strip(),
+        resolved_org=discovery.corp,
         aliases=list(discovery.aliases),
         candidates=mined,
         rejected_candidates=rejected_drafts,
         telemetry=tel,
         needs_manual_org_review=manual_review,
     )
-    rid = run_id_for_url(hotel_url)
+    rid = run_id_for_url(corp_url)
     write_pipeline_ui_artifact(out_dir, rid, ui)
     if aggregate_sync:
         persist_pipeline_ui(ui, jsons_dir=jsons_dir, fulljsons_dir=fulljsons_dir)
 
     return PipelineRunResult(
-        hotel=ui.resolved_org,
+        corp=ui.resolved_org,
         candidates=mined,
         review_rows=rows,
         telemetry=tel,
@@ -134,10 +134,10 @@ def run_pipeline(
 
 def main(argv: list[str] | None = None) -> int:
     load_repo_dotenv(Path(__file__).resolve().parent.parent)
-    p = argparse.ArgumentParser(description="Grok-led hotel stakeholder pipeline (v4)")
+    p = argparse.ArgumentParser(description="Grok-led SSA executive pipeline (v4)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    run_p = sub.add_parser("run", help="Run pipeline for one hotel URL")
+    run_p = sub.add_parser("run", help="Run pipeline for one company URL")
     run_p.add_argument("url")
     run_p.add_argument("--out", type=Path, default=Path("outputs/pipeline"))
     run_p.add_argument("--max-candidates", type=int, default=50)

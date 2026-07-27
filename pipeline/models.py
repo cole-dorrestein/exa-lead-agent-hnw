@@ -77,7 +77,7 @@ class CandidateDraft(BaseModel):
 
 
 class GrokDiscoveryResult(BaseModel):
-    hotel: CorpOrg
+    corp: CorpOrg
     aliases: list[OrgAlias] = Field(default_factory=list)
     drafts: list[CandidateDraft] = Field(default_factory=list)
 
