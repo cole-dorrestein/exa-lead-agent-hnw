@@ -6,3 +6,6 @@ venv/
 .env
 .worktrees/
 outputs/
+csv/
+jsons/
+fullJSONs/
